@@ -1,37 +1,104 @@
 <!DOCTYPE html>
-<html>
-<body style="margin:0; background:#000; color:#fff; display:flex; justify-content:center; align-items:center; height:100vh;">
-    <button id="btn" style="padding:20px; background:red; color:white; border-radius:10px; font-size:24px; cursor:pointer;">点我开启圣诞魔法</button>
-    <video id="v" style="position:fixed; bottom:0; right:0; width:100px; opacity:0.5;" autoplay playsinline></video>
-    <script src="https://cdn.staticfile.org/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script>
-        const btn = document.getElementById('btn');
-        btn.onclick = async () => {
-            btn.innerText = "加载中...请点允许摄像头";
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
-            
-            const geo = new THREE.SphereGeometry(1, 32, 32);
-            const mat = new THREE.PointsMaterial({color: 0x00ffcc, size: 0.05});
-            const p = new THREE.Points(geo, mat);
-            scene.add(p);
-            camera.position.z = 3;
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🎄 AI 魔法圣诞树</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; }
+        #launch-btn { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; padding: 15px 30px; background: #ff0055; color: white; border: none; border-radius: 30px; cursor: pointer; font-size: 18px; box-shadow: 0 0 20px #ff0055; }
+        #video-input { position: fixed; bottom: 10px; right: 10px; width: 120px; height: 90px; border-radius: 10px; transform: scaleX(-1); z-index: 10; border: 1px solid rgba(255,255,255,0.3); object-fit: cover; }
+    </style>
+</head>
+<body>
 
-            const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
-            hands.onResults(res => { if(res.multiHandLandmarks[0]) p.scale.setScalar(res.multiHandLandmarks[0][8].y * 5); });
-            const cam = new Camera(document.getElementById('v'), {onFrame: async () => await hands.send({image: document.getElementById('v')})});
-            await cam.start();
-            btn.style.display = 'none';
-            function anim() { requestAnimationFrame(anim); p.rotation.y += 0.01; renderer.render(scene, camera); }
-            anim();
-        };
-    </script>
+<button id="launch-btn">✨ 开启圣诞魔法</button>
+<video id="video-input" playsinline webkit-playsinline muted></video>
+
+<script src="https://cdn.staticfile.org/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+let scene, camera, renderer, particles, particleMaterial;
+let handScale = 1.0;
+
+function initTree() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.z = 5;
+
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    const geometry = new THREE.BufferGeometry();
+    const pos = [];
+    const colors = [];
+    
+    // 生成圣诞树形状的粒子
+    for(let i=0; i<15000; i++) {
+        let y = Math.random() * 5 - 2.5; 
+        let radius = (2.5 - y) * 0.5; // 越往上半径越小，形成锥形
+        let angle = Math.random() * Math.PI * 2;
+        let r = Math.pow(Math.random(), 0.6) * radius;
+        pos.push(Math.cos(angle)*r, y, Math.sin(angle)*r);
+        
+        // 渐变色：底部深绿，顶部浅绿/红
+        colors.push(0, 0.5 + (y+2.5)/10, 0.2); 
+    }
+    
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+    particleMaterial = new THREE.PointsMaterial({ 
+        size: 0.03, 
+        vertexColors: true, 
+        transparent: true, 
+        blending: THREE.AdditiveBlending 
+    });
+
+    particles = new THREE.Points(geometry, particleMaterial);
+    scene.add(particles);
+}
+
+async function initAI() {
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+    hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5});
+    hands.onResults(res => {
+        if(res.multiHandLandmarks && res.multiHandLandmarks[0]) {
+            const lm = res.multiHandLandmarks[0];
+            // 计算大拇指和食指距离
+            const d = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
+            handScale = d * 8; // 将手势映射到缩放比例
+        }
+    });
+
+    const cam = new Camera(document.getElementById('video-input'), {
+        onFrame: async () => { await hands.send({image: document.getElementById('video-input')}); },
+        width: 480, height: 360
+    });
+    return cam.start();
+}
+
+document.getElementById('launch-btn').onclick = async () => {
+    document.getElementById('launch-btn').style.display = 'none';
+    initTree();
+    await initAI();
+    animate();
+};
+
+function animate() {
+    requestAnimationFrame(animate);
+    particles.rotation.y += 0.01;
+    // 丝滑缩放效果
+    let targetScale = Math.max(0.5, handScale);
+    particles.scale.setScalar(THREE.MathUtils.lerp(particles.scale.x, targetScale, 0.1));
+    renderer.render(scene, camera);
+}
+</script>
 </body>
 </html>
+
 
 
