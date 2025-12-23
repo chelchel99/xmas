@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🎄 AI 魔法圣诞树</title>
+    <title>🎄 AI 梦幻圣诞树</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; }
-        #launch-btn { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; padding: 15px 30px; background: #ff0055; color: white; border: none; border-radius: 30px; cursor: pointer; font-size: 18px; box-shadow: 0 0 20px #ff0055; }
-        #video-input { position: fixed; bottom: 10px; right: 10px; width: 120px; height: 90px; border-radius: 10px; transform: scaleX(-1); z-index: 10; border: 1px solid rgba(255,255,255,0.3); object-fit: cover; }
+        #launch-btn { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 100; padding: 15px 35px; background: linear-gradient(45deg, #00ffcc, #0066ff); color: white; border: none; border-radius: 30px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 0 20px rgba(0,255,204,0.5); }
+        /* 隐藏摄像头画面 */
+        #video-input { display: none; }
     </style>
 </head>
 <body>
 
-<button id="launch-btn">✨ 开启圣诞魔法</button>
+<button id="launch-btn">🎁 开启我的圣诞魔法</button>
 <video id="video-input" playsinline webkit-playsinline muted></video>
 
 <script src="https://cdn.staticfile.org/three.js/r128/three.min.js"></script>
@@ -20,60 +21,59 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-let scene, camera, renderer, particles, particleMaterial;
-let handScale = 1.0;
+let scene, camera, renderer, tree, snow, handScale = 1.0;
 
-function initTree() {
+function initMagic() {
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     camera.position.z = 5;
-
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    const geometry = new THREE.BufferGeometry();
-    const pos = [];
-    const colors = [];
-    
-    // 生成圣诞树形状的粒子
-    for(let i=0; i<15000; i++) {
+    // 1. 创建圣诞树（带彩色装饰灯）
+    const treeGeo = new THREE.BufferGeometry();
+    const treePos = [], treeCols = [];
+    for(let i=0; i<20000; i++) {
         let y = Math.random() * 5 - 2.5; 
-        let radius = (2.5 - y) * 0.5; // 越往上半径越小，形成锥形
+        let radius = (2.5 - y) * 0.5;
         let angle = Math.random() * Math.PI * 2;
-        let r = Math.pow(Math.random(), 0.6) * radius;
-        pos.push(Math.cos(angle)*r, y, Math.sin(angle)*r);
+        let r = Math.pow(Math.random(), 0.7) * radius;
+        treePos.push(Math.cos(angle)*r, y, Math.sin(angle)*r);
         
-        // 渐变色：底部深绿，顶部浅绿/红
-        colors.push(0, 0.5 + (y+2.5)/10, 0.2); 
+        // 80% 绿色粒子，20% 彩色装饰灯（红/金）
+        if(Math.random() > 0.8) {
+            Math.random() > 0.5 ? treeCols.push(1, 0.8, 0) : treeCols.push(1, 0, 0.3); // 金色或红色
+        } else {
+            treeCols.push(0, 0.6 + (y+2.5)/10, 0.3); // 渐变绿
+        }
     }
-    
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    treeGeo.setAttribute('position', new THREE.Float32BufferAttribute(treePos, 3));
+    treeGeo.setAttribute('color', new THREE.Float32BufferAttribute(treeCols, 3));
+    tree = new THREE.Points(treeGeo, new THREE.PointsMaterial({ size: 0.025, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending }));
+    scene.add(tree);
 
-    particleMaterial = new THREE.PointsMaterial({ 
-        size: 0.03, 
-        vertexColors: true, 
-        transparent: true, 
-        blending: THREE.AdditiveBlending 
-    });
-
-    particles = new THREE.Points(geometry, particleMaterial);
-    scene.add(particles);
+    // 2. 创建背景降雪
+    const snowGeo = new THREE.BufferGeometry();
+    const snowPos = [];
+    for(let i=0; i<2000; i++) {
+        snowPos.push(Math.random()*20-10, Math.random()*20-10, Math.random()*20-10);
+    }
+    snowGeo.setAttribute('position', new THREE.Float32BufferAttribute(snowPos, 3));
+    snow = new THREE.Points(snowGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.03, transparent: true, opacity: 0.8 }));
+    scene.add(snow);
 }
 
 async function initAI() {
-    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-    hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5});
+    const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+    hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6});
     hands.onResults(res => {
         if(res.multiHandLandmarks && res.multiHandLandmarks[0]) {
             const lm = res.multiHandLandmarks[0];
-            // 计算大拇指和食指距离
             const d = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
-            handScale = d * 8; // 将手势映射到缩放比例
+            handScale = 0.5 + d * 6;
         }
     });
-
     const cam = new Camera(document.getElementById('video-input'), {
         onFrame: async () => { await hands.send({image: document.getElementById('video-input')}); },
         width: 480, height: 360
@@ -83,17 +83,24 @@ async function initAI() {
 
 document.getElementById('launch-btn').onclick = async () => {
     document.getElementById('launch-btn').style.display = 'none';
-    initTree();
+    initMagic();
     await initAI();
     animate();
 };
 
 function animate() {
     requestAnimationFrame(animate);
-    particles.rotation.y += 0.01;
-    // 丝滑缩放效果
-    let targetScale = Math.max(0.5, handScale);
-    particles.scale.setScalar(THREE.MathUtils.lerp(particles.scale.x, targetScale, 0.1));
+    tree.rotation.y += 0.01;
+    // 雪花飘落
+    const positions = snow.geometry.attributes.position.array;
+    for(let i=1; i<positions.length; i+=3) {
+        positions[i] -= 0.02;
+        if(positions[i] < -10) positions[i] = 10;
+    }
+    snow.geometry.attributes.position.needsUpdate = true;
+    
+    let s = THREE.MathUtils.lerp(tree.scale.x, handScale, 0.1);
+    tree.scale.setScalar(s);
     renderer.render(scene, camera);
 }
 </script>
