@@ -65,7 +65,7 @@ function initMagic() {
 }
 
 async function initAI() {
-    const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+    const hands = new Hands({locateFile: (f) => `https://fastly.jsdelivr.net/npm/@mediapipe/hands/${f}`});
     hands.setOptions({maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.6});
     hands.onResults(res => {
         if(res.multiHandLandmarks && res.multiHandLandmarks[0]) {
@@ -106,6 +106,7 @@ function animate() {
 </script>
 </body>
 </html>
+
 
 
 
